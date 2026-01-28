@@ -324,11 +324,35 @@ const BillingSession = ({ table, menuItems, onClose, onUpdate, notify, setPrintD
         } else { setCart([]); }
     };
 
-    const printKOT = () => {
-        if(cart.length === 0) return notify("Cart is empty", "error");
-        setPrintData({ table, items: cart, type: 'KOT', customer, billNo: 'KOT', date: new Date() });
-        setTimeout(() => { window.print(); notify("KOT Sent", "success"); onClose(); }, 300);
-    };
+        const printKOT = async () => {
+    if (cart.length === 0) return notify("Cart is empty", "error");
+
+    try {
+        // Map frontend data to match your backend's expected structure
+        const kotData = {
+            table_no: table.table_no,
+            waiter_name: localStorage.getItem('username') || "Staff",
+            is_running: table.status === 'occupied',
+            items: cart.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                note: item.special_instruction || "" // backend expects 'note'
+            }))
+        };
+
+        const response = await api.post('/print/kot', kotData);
+
+        if (response.data.success) {
+            notify("KOT Sent to Kitchen", "success");
+            onClose(); // Close modal after successful print
+        } else {
+            notify("Printer Error", "error");
+        }
+    } catch (error) {
+        console.error("Print Failed:", error);
+        notify("Backend Printer Offline", "error");
+    }
+};
 
     const settleBill = async () => {
         if (!cart.length) return notify("Cart is empty", "error");

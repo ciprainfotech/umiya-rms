@@ -87,53 +87,57 @@ exports.deleteCategory = async (req, res) => {
 
 exports.addItem = async (req, res) => {
     const { table_id, item_code, quantity, special_instruction } = req.body;
-    const client = await db.getClient(); // Get dedicated client for transaction
-    
+    const client = await db.getClient();
     try {
         await client.query('BEGIN');
 
-        // 1. Fetch Item Details
+        // 1. Get Item Details
         const itemRes = await client.query('SELECT * FROM items WHERE item_code = $1 AND is_active = true', [item_code]);
-        if (itemRes.rows.length === 0) throw new Error("Item not found or inactive");
+        if (itemRes.rows.length === 0) throw new Error("Item not found");
         const item = itemRes.rows[0];
 
-        // 2. LOCK TABLE ROW (Concurrency Fix)
-        // This ensures that if 2 waiters add items to the same table simultaneously, 
-        // they are processed one after another, preventing duplicate active orders.
-        const tableRes = await client.query('SELECT is_ac, status FROM restaurant_tables WHERE id = $1 FOR UPDATE', [table_id]);
-        if (tableRes.rows.length === 0) throw new Error("Table not found");
-        
+        // 2. Get Table and current Order
+        const tableRes = await client.query('SELECT is_ac FROM restaurant_tables WHERE id = $1', [table_id]);
         const price = tableRes.rows[0].is_ac ? item.price_ac : item.price_non_ac;
 
-        // 3. Get or Create Active Order
-        let orderId;
-        const orderRes = await client.query('SELECT id FROM orders WHERE table_id = $1 AND is_paid = false', [table_id]);
-        
-        if (orderRes.rows.length > 0) {
-            orderId = orderRes.rows[0].id;
-        } else {
-            const newOrder = await client.query('INSERT INTO orders (table_id) VALUES ($1) RETURNING id', [table_id]);
-            orderId = newOrder.rows[0].id;
-            // Update table status
-            await client.query("UPDATE restaurant_tables SET status = 'occupied' WHERE id = $1", [table_id]);
-        }
+        let orderRes = await client.query('SELECT id FROM orders WHERE table_id = $1 AND is_paid = false', [table_id]);
+        let orderId = orderRes.rows.length > 0 ? orderRes.rows[0].id : 
+            (await client.query('INSERT INTO orders (table_id) VALUES ($1) RETURNING id', [table_id])).rows[0].id;
 
-        // 4. Insert Order Item
-        // Note: price_at_time safeguards against future menu price changes affecting old bills
-        await client.query(
-            `INSERT INTO order_items (order_id, item_id, quantity, price_at_time, special_instruction) 
-             VALUES ($1, $2, $3, $4, $5)`, 
-            [orderId, item.id, quantity, price, special_instruction || '']
+        // 3. Update Table Status
+        await client.query("UPDATE restaurant_tables SET status = 'occupied' WHERE id = $1", [table_id]);
+
+        // --- THE FIX: CHECK FOR EXISTING ITEM ---
+        // We look for a line that has the same Order ID, same Item ID, and SAME special instruction
+        const existingItem = await client.query(
+            `SELECT id, quantity FROM order_items 
+             WHERE order_id = $1 AND item_id = $2 AND special_instruction = $3`,
+            [orderId, item.id, special_instruction || '']
         );
+
+        if (existingItem.rows.length > 0) {
+            // IF EXISTS: Increase the quantity of the existing line
+            await client.query(
+                `UPDATE order_items SET quantity = quantity + $1 
+                 WHERE id = $2`,
+                [quantity, existingItem.rows[0].id]
+            );
+        } else {
+            // IF NOT EXISTS: Create a new line
+            await client.query(
+                `INSERT INTO order_items (order_id, item_id, quantity, price_at_time, special_instruction) 
+                 VALUES ($1, $2, $3, $4, $5)`, 
+                [orderId, item.id, quantity, price, special_instruction || '']
+            );
+        }
 
         await client.query('COMMIT');
         res.json({ success: true, orderId });
-
-    } catch (err) {
-        await client.query('ROLLBACK');
-        handleError(res, err, "Failed to add item");
-    } finally {
-        client.release(); // CRITICAL: Always release client back to pool
+    } catch (err) { 
+        await client.query('ROLLBACK'); 
+        handleError(res, err); 
+    } finally { 
+        client.release(); 
     }
 };
 
