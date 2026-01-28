@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;400;600;800&family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #f39c12;
+  --color-brand-dark: #1a1a1a;
+  --font-sans: "Plus Jakarta Sans", sans-serif;
+  --font-serif: "Playfair Display", serif;
+}
+
+@layer components {
+  /* ... your existing glass-portal, input-lux, etc ... */
+
+  /* --- PRINT OPTIMIZATION --- */
+  @media print {
+  @page { margin: 0; size: auto; }
+  body * { visibility: hidden; }
+  .print\:block, .print\:block * { visibility: visible; }
+  .print\:block { position: absolute; left: 0; top: 0; width: 100%; }
+}
+
+/* Custom Scrollbar for dense lists */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+}
