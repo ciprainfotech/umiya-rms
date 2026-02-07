@@ -7,21 +7,30 @@ import WaiterDashboard from './pages/WaiterDashboard';
 import ManagerDashboard from './pages/ManagerDashboard';
 import OwnerDashboard from './pages/OwnerDashboard';
 
+// --- HELPER: Normalize Role ---
+// This ensures 'admin' in DB maps to 'owner' in URL
+const getRole = () => {
+  const role = localStorage.getItem('role');
+  if (role === 'admin') return 'owner'; // DB says 'admin', URL needs 'owner'
+  return role;
+};
+
+const getToken = () => localStorage.getItem('token');
+
 /**
  * PROTECTED ROUTE COMPONENT
  */
 const ProtectedRoute = ({ children, allowedRole }) => {
-  const token = localStorage.getItem('token');
-  const role = localStorage.getItem('role');
+  const token = getToken();
+  const role = getRole();
 
-  // 1. If not logged in, send to login
+  // 1. Not logged in -> Login
   if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  // 2. If logged in but trying to access the wrong role's page
+  // 2. Logged in but wrong role -> Go to THEIR dashboard
   if (allowedRole && role !== allowedRole) {
-    // Redirect to their own dashboard based on their role
     return <Navigate to={`/${role}`} replace />;
   }
 
@@ -32,9 +41,10 @@ const ProtectedRoute = ({ children, allowedRole }) => {
  * PUBLIC ROUTE COMPONENT
  */
 const PublicRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  const role = localStorage.getItem('role');
+  const token = getToken();
+  const role = getRole();
 
+  // If already logged in, force them to their dashboard
   if (token && role) {
     return <Navigate to={`/${role}`} replace />;
   }
@@ -42,11 +52,22 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
+/**
+ * HOME REDIRECT
+ */
+const HomeRedirect = () => {
+  const token = getToken();
+  const role = getRole();
+
+  if (!token) return <Navigate to="/login" replace />;
+  return <Navigate to={`/${role}`} replace />;
+};
+
 function App() {
   return (
     <Router>
       <Routes>
-        {/* LOGIN: Publicly accessible but redirects if already logged in */}
+        {/* LOGIN */}
         <Route 
           path="/login" 
           element={
@@ -56,7 +77,7 @@ function App() {
           } 
         />
 
-        {/* WAITER: Tablet-optimized interface */}
+        {/* WAITER */}
         <Route 
           path="/waiter" 
           element={
@@ -66,7 +87,7 @@ function App() {
           } 
         />
 
-        {/* MANAGER: PC-optimized interface with history and keyboard flow */}
+        {/* MANAGER */}
         <Route 
           path="/manager" 
           element={
@@ -76,7 +97,7 @@ function App() {
           } 
         />
 
-        {/* OWNER: Master statistics and sales data */}
+        {/* OWNER (Maps to 'admin' role in DB) */}
         <Route 
           path="/owner" 
           element={
@@ -86,25 +107,14 @@ function App() {
           } 
         />
 
-        {/* DEFAULT ROUTE: Logic to send user to correct dashboard if they visit '/' */}
+        {/* ROOT REDIRECT */}
         <Route path="/" element={<HomeRedirect />} />
         
-        {/* CATCH-ALL: Redirect broken links to login */}
+        {/* CATCH ALL */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   );
 }
-
-/**
- * Helper component to handle the root (/) path redirection
- */
-const HomeRedirect = () => {
-  const token = localStorage.getItem('token');
-  const role = localStorage.getItem('role');
-
-  if (!token) return <Navigate to="/login" replace />;
-  return <Navigate to={`/${role}`} replace />;
-};
 
 export default App;
