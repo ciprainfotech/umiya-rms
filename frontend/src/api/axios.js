@@ -4,11 +4,11 @@ import axios from 'axios';
 const SESSION_DURATION = 4 * 60 * 60 * 1000;
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5001/api',
+    baseURL: '/api',
     timeout: 10000, 
     headers: {
         'Content-Type': 'application/json'
-    }
+    },
 });
 
 /**

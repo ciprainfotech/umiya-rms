@@ -2,18 +2,23 @@ require('dotenv').config(); // MUST BE ON TOP
 const express = require('express');
 const cors = require('cors');
 const db = require('./config/db'); // Your PostgreSQL connection
+const cron = require('node-cron');
 
 
 // Import Route Files
 const authController = require('./controllers/authController');
 const orderRoutes = require('./routes/orderRoutes');
 const printRoutes = require('./routes/printRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
 // --- MIDDLEWARES ---
 app.use(cors()); // Allows Frontend to communicate with Backend
 app.use(express.json()); // Allows Backend to process JSON data
+
+
+
 
 // --- DATABASE CONNECTION TEST ---
 // This ensures that whenever you start the server, it checks the DB first.
@@ -28,6 +33,16 @@ const checkConnection = async () => {
 };
 checkConnection();
 
+cron.schedule('0 0 * * *', async () => {
+    try {
+        console.log("🧹 Running Cleanup: Deleting old queue history...");
+        const result = await db.query("DELETE FROM waiting_queue WHERE created_at < NOW() - INTERVAL '7 days'");
+        console.log(`✅ Cleanup Complete: Deleted ${result.rowCount} old records.`);
+    } catch (err) {
+        console.error("❌ Cleanup Failed:", err);
+    }
+});
+
 // --- ROUTES ---
 
 // 1. Authentication Route (Login)
@@ -40,6 +55,7 @@ app.post('/api/auth/login', authController.login);
 // POST http://localhost:5001/api/orders/add-item
 app.use('/api/orders', orderRoutes);
 app.use('/api/print', printRoutes);
+app.use('/api/admin', adminRoutes);
 
 // --- SERVER INITIALIZATION ---
 const PORT = process.env.PORT || 5001;
